@@ -1,4 +1,4 @@
-package com.morichal.demo.controllers;
+/*package com.morichal.demo.controllers;
 
 import java.util.Optional;
 
@@ -18,7 +18,7 @@ public class WeightController {
     @GetMapping("/api/weight")
     public WeightResponse getWeight() {
         Optional<Double> weightOpt = weightService.getWeight();
-double weight = weightOpt.orElse(0.0); // Devuelve 0.0 si no se puede obtener el peso
+        double weight = weightOpt.orElse(0.0); //* Devuelve 0.0 si no se puede obtener el peso
         return new WeightResponse(weight);
     }
-}
+}*/

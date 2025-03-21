@@ -1,4 +1,4 @@
-package com.morichal.demo.services;
+/*package com.morichal.demo.services;
 
 import java.util.Optional;
 
@@ -15,7 +15,7 @@ private static final Logger logger = LoggerFactory.getLogger(WeightService.class
     private final SerialPort serialPort;
 
     public WeightService() {
-        // Configura el puerto serie
+        //*  Configura el puerto serie
         serialPort = SerialPort.getCommPort("/dev/ttyUSB0"); // Cambia esto según tu configuración
         serialPort.setComPortParameters(9600, 8, 1, 0);
         serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 1000, 0);
@@ -29,7 +29,7 @@ private static final Logger logger = LoggerFactory.getLogger(WeightService.class
             String weightData = new String(readBuffer, 0, numRead).trim();
             try {
                 double weight = Double.parseDouble(weightData);
-                if (weight >= 0) { // Validación adicional para asegurar que el peso es válido
+                if (weight >= 0) { //* Validación adicional para asegurar que el peso es válido
                     return Optional.of(weight);
                 } else {
                     logger.warn("Peso inválido leído: {}", weight);
@@ -48,4 +48,4 @@ private static final Logger logger = LoggerFactory.getLogger(WeightService.class
             serialPort.closePort();
         }
     }
-}
+}*/

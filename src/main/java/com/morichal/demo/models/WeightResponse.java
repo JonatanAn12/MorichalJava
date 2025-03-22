@@ -1,4 +1,4 @@
-package com.morichal.demo.models;
+/*package com.morichal.demo.models;
 
 public class WeightResponse {
     private double weight;
@@ -14,4 +14,4 @@ public class WeightResponse {
     public void setWeight(double weight) {
         this.weight = weight;
     }
-}
+}*/

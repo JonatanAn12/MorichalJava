@@ -14,7 +14,8 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <java.version>21</java.version>
-        <spring-boot.version>3.4.3</spring-boot.version>
+        <spring-boot.version>3.1.0</spring-boot.version>
+        <spring-session.version>3.0.2</spring-session.version>
     </properties>
 
     <dependencies>
@@ -31,7 +32,7 @@
         <dependency>
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-core</artifactId>
-            <version>2.6.0</version>
+            <version>${spring-session.version}</version>
         </dependency>
         <dependency>
             <groupId>org.mariadb.jdbc</groupId>

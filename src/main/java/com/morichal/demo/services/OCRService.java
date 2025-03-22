@@ -18,6 +18,12 @@ public class OCRService {
     private String tessDataPath;
 
     public String extractTextFromImage(MultipartFile image) throws IOException, TesseractException {
+        // Validar el tipo de archivo
+        String contentType = image.getContentType();
+        if (!isValidImageType(contentType)) {
+            throw new IllegalArgumentException("Invalid file type. Only JPEG, JPG, and PNG are allowed.");
+        }
+
         // Guardar la imagen temporalmente
         File tempFile = File.createTempFile("upload-", ".png");
         image.transferTo(tempFile);
@@ -32,5 +38,9 @@ public class OCRService {
         tempFile.delete();
 
         return text;
+    }
+
+    private boolean isValidImageType(String contentType) {
+        return contentType.equals("image/jpeg") || contentType.equals("image/jpg") || contentType.equals("image/png");
     }
 }

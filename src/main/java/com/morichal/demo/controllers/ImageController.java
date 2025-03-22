@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.morichal.demo.models.imageResponse;
+import com.morichal.demo.repositories.imageResponseRepository;
 import com.morichal.demo.services.OCRService;
 
 import net.sourceforge.tess4j.TesseractException;
@@ -20,8 +22,13 @@ public class ImageController {
     @Autowired
     private OCRService ocrService;
 
+    @Autowired
+    private imageResponseRepository imageResponseRepository;
+
     @PostMapping("/extract-text")
-    public String uploadImage(@RequestParam("image") MultipartFile image) throws IOException, TesseractException {
-        return ocrService.extractTextFromImage(image);
+    public imageResponse uploadImage(@RequestParam("image") MultipartFile image) throws IOException, TesseractException {
+        String extractedText = ocrService.extractTextFromImage(image);
+        imageResponse imageResponse = new imageResponse(extractedText);
+        return imageResponseRepository.save(imageResponse);
     }
 }

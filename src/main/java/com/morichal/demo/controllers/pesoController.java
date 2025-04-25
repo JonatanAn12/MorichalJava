@@ -23,13 +23,15 @@ public class pesoController {
     @PostMapping("/peso")
     public PesoResponse obtenerPeso(@RequestParam("image") MultipartFile image) {
         try {
-            // Usar el servicio OCR para extraer el texto de la imagen
+            //* */ Usar el servicio OCR para extraer el texto de la imagen
             String textoExtraido = ocrService.extractTextFromImage(image);
-            // Convertir el texto extraído a un valor de peso (double)
+            System.out.println("Texto extraído de la imagen: " + textoExtraido);
+
+            //* */ Convertir el texto extraído a un valor de peso (double)
             double peso = Double.parseDouble(textoExtraido.trim());
             return new PesoResponse(peso);
         } catch (IOException | TesseractException | NumberFormatException e) {
-            // Manejar errores de extracción de texto o conversión
+            //* */ Manejar errores de extracción de texto o conversión
             e.printStackTrace();
             return new PesoResponse(0.0); // Devolver un valor por defecto en caso de error
         }

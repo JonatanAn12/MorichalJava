@@ -27,6 +27,7 @@ public class ImageController {
 
     @PostMapping("/extract-text")
     public imageResponse uploadImage(@RequestParam("image") MultipartFile image) throws IOException, TesseractException {
+        System.out.println("Archivo recibido: " + image.getOriginalFilename());
         String extractedText = ocrService.extractTextFromImage(image);
         imageResponse imageResponse = new imageResponse(extractedText);
         return imageResponseRepository.save(imageResponse);

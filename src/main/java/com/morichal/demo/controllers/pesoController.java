@@ -14,7 +14,7 @@ import com.morichal.demo.services.OCRService;
 import net.sourceforge.tess4j.TesseractException;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/ocr")
 public class pesoController {
 
     @Autowired

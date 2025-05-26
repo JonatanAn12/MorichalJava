@@ -14,7 +14,9 @@ public class imageResponse {
 
     private Long id;
     @Lob
-    private String text;
+    private double  text;
+    private String uM;
+    private String categoria;
 
     public imageResponse() {
 
@@ -28,15 +30,31 @@ public class imageResponse {
         this.id = id;
     }
 
-    public imageResponse(String text) { 
+    public imageResponse(Double text) { 
         this.text = text;
     }
-    public String getText() {
+    public Double getText() {
         return text;
     }
 
-    public void setText(String text) {
+    public void setText(Double text) {
         this.text = text;
+    }
+
+    public String getuM() {
+        return uM;
+    }
+
+    public void setuM(String uM) {
+        this.uM = uM;
+    }
+
+    public String getCategoria() {
+        return categoria;
+    }
+
+    public void setCategoria(String categoria) {
+        this.categoria = categoria;
     }
 
 }

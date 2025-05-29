@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.morichal.demo.models.imageResponse;
 import com.morichal.demo.services.OCRService;
 
 import net.sourceforge.tess4j.TesseractException;
@@ -23,15 +24,14 @@ public class pesoController {
     @PostMapping("/peso")
     public PesoResponse obtenerPeso(@RequestParam("image") MultipartFile image) {
         try {
-            //* */ Usar el servicio OCR para extraer el texto de la imagen
-            String textoExtraido = ocrService.extractTextFromImage(image);
-            System.out.println("Texto extraído de la imagen: " + textoExtraido);
-
-            //* */ Convertir el texto extraído a un valor de peso (double)
-            double peso = Double.parseDouble(textoExtraido.trim());
-            return new PesoResponse(peso);
+            //* */ Usar el servicio OCR para extraer el número de la imagen
+            Double pesoExtraido = ocrService.extractNumberFromImage(image);
+            imageResponse response = new imageResponse(pesoExtraido); 
+            System.out.println("Peso extraído de la imagen: " + pesoExtraido);
+            //* */ Devolver el valor extraído como peso (double)
+            return new PesoResponse(response.getText());
         } catch (IOException | TesseractException | NumberFormatException e) {
-            //* */ Manejar errores de extracción de texto o conversión
+            //* Manejar errores de extracción de texto o conversión
             e.printStackTrace();
             return new PesoResponse(0.0); // Devolver un valor por defecto en caso de error
         }

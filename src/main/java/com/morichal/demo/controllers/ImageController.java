@@ -1,6 +1,7 @@
 package com.morichal.demo.controllers;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -48,6 +49,11 @@ public class ImageController {
     @GetMapping
     public List<imageResponse> listarTodos() {
         return ocrService.listarTodos();
+    }
+
+    @GetMapping("/{id}")
+    public Optional<imageResponse> obtenerPorId(@PathVariable Long id) {
+        return ocrService.buscarPorId(id);
     }
 
     // Actualizar un registro

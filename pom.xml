@@ -16,6 +16,7 @@
         <java.version>21</java.version>
         <spring-boot.version>3.1.0</spring-boot.version>
         <spring-session.version>3.0.2</spring-session.version>
+        <opencv.jar.path>/usr/share/java/opencv4/opencv-460.jar</opencv.jar.path>
     </properties>
 
     <dependencies>
@@ -101,7 +102,19 @@
             <artifactId>slf4j-api</artifactId>
             <version>2.0.9</version>
         </dependency>
- 
+        <dependency>
+         <groupId>org.tensorflow</groupId>
+         <artifactId>tensorflow-core-platform</artifactId>
+         <version>0.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.opencv</groupId>
+            <artifactId>opencv</artifactId>
+            <version>4.6.0-0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/opencv-4.6.0-0.jar</systemPath>
+        </dependency>
+
     </dependencies>
 
     <build>

@@ -1,4 +1,5 @@
 package com.morichal.demo.services;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -16,11 +17,13 @@ import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
 
-
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 
 @Service
 public class OCRService {
-
 
     @Autowired
     private imageResponseRepository imageResponseRepository;
@@ -28,8 +31,11 @@ public class OCRService {
     @Value("${tesseract.datapath}")
     private String tessDataPath;
 
+    static {
+    System.loadLibrary(org.opencv.core.Core.NATIVE_LIBRARY_NAME);
+    }
+
     public Double extractNumberFromImage(MultipartFile image) throws IOException, TesseractException {
-        //*  Validación de archivo
         if (image == null || image.isEmpty()) {
             throw new IllegalArgumentException("No se recibió ningún archivo.");
         }
@@ -38,19 +44,22 @@ public class OCRService {
             throw new IllegalArgumentException("Invalid file type. Only JPEG, JPG, and PNG are allowed.");
         }
 
-        // Guardar la imagen temporalmente
         String extension = contentType.equals("image/png") ? ".png" : ".jpg";
         File tempFile = File.createTempFile("upload-", extension);
         image.transferTo(tempFile);
 
-        // Usar Tesseract para reconocer el texto
+        Mat src = Imgcodecs.imread(tempFile.getAbsolutePath());
+        Mat gray = new Mat();
+        Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.threshold(gray, gray, 0, 255, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU);
+        Imgcodecs.imwrite(tempFile.getAbsolutePath(), gray); 
+
         ITesseract tesseract = new Tesseract();
-        tesseract.setDatapath(tessDataPath); // Ruta a los datos de Tesseract
+        tesseract.setDatapath(tessDataPath); 
         tesseract.setLanguage("eng");
         String text = tesseract.doOCR(tempFile);
         tempFile.delete();
 
-        // Extraer el primer número válido del texto
         String numberStr = text.replaceAll("[^0-9.,]", "").replace(",", ".");
         if (numberStr.isEmpty()) {
             throw new IllegalArgumentException("No se detectó ningún número en la imagen.");
@@ -66,8 +75,7 @@ public class OCRService {
         return contentType.equals("image/jpeg") || contentType.equals("image/jpg") || contentType.equals("image/png");
     }
 
-    //* imageResponse
-
+    // Métodos CRUD
     public List<imageResponse> listarTodos() {
         return imageResponseRepository.findAll();
     }

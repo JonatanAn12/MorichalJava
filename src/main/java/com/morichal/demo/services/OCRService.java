@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.morichal.demo.models.imageResponse;
 import com.morichal.demo.repositories.imageResponseRepository;
+import com.morichal.demo.services.FileStorageService;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -38,8 +39,7 @@ public class OCRService {
             throw new IllegalArgumentException("Invalid file type. Only JPEG, JPG, and PNG are allowed.");
         }
 
-        // Guardar la imagen temporalmente
-        String extension = contentType.equals("image/png") ? ".png" : ".jpg";
+        String extension = contentType.equals("image/png") ? ".png" : ".jpeg";
         File tempFile = File.createTempFile("upload-", extension);
         image.transferTo(tempFile);
 
@@ -80,17 +80,85 @@ public class OCRService {
         return imageResponseRepository.save(response);
     }
 
-    public imageResponse actualizar(Long id, imageResponse nuevo) {
-        imageResponse existente = imageResponseRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
-        existente.setText(nuevo.getText());
-        existente.setuM(nuevo.getuM());
-        existente.setCategoria(nuevo.getCategoria());
-        existente.setEstado(nuevo.getEstado());
-        return imageResponseRepository.save(existente);
+public imageResponse actualizar(Long id, imageResponse nuevo) {
+    imageResponse existente = imageResponseRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
+    
+    existente.setText(nuevo.getText());
+    existente.setuM(nuevo.getuM());
+    existente.setCategoria(nuevo.getCategoria());
+    existente.setEstado(nuevo.getEstado());
+    
+   
+    if (nuevo.getNombreImagen() != null) {
+        existente.setNombreImagen(nuevo.getNombreImagen());
     }
+    
+    return imageResponseRepository.save(existente);
+}
 
     public void eliminar(Long id) {
         imageResponseRepository.deleteById(id);
     }
+
+
+   public String obtenerRutaImagen(Long id) {
+    imageResponse registro = imageResponseRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
+    
+    if (registro.getNombreImagen() == null || registro.getNombreImagen().isEmpty()) {
+        throw new RuntimeException("El registro no tiene imagen asociada");
+    }
+    
+    return registro.getNombreImagen();
+}
+
+ @Autowired
+ private FileStorageService fileStorageService;
+
+public imageResponse crearConImagen(String categoria, String text, String uM, String estado, MultipartFile imagen) {
+    imageResponse nuevo = new imageResponse();
+    nuevo.setCategoria(categoria);
+    nuevo.setText(Double.parseDouble(text));
+    nuevo.setuM(uM);
+    nuevo.setEstado(estado);
+    
+    // GUARDAR LA IMAGEN SI EXISTE
+    if (imagen != null && !imagen.isEmpty()) {
+        String nombreImagen = fileStorageService.guardarImagen(imagen);
+        nuevo.setNombreImagen(nombreImagen);
+    }
+    
+    return imageResponseRepository.save(nuevo);
+}
+
+public imageResponse actualizarConImagen(Long id, String text, String uM, String categoria, String estado, MultipartFile imagen) {
+    imageResponse existente = imageResponseRepository.findById(id)
+        .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
+    
+    existente.setText(Double.parseDouble(text));
+    existente.setuM(uM);
+    existente.setCategoria(categoria);
+    existente.setEstado(estado);
+    
+    // MANEJAR IMAGEN SI SE ENVÍA UNA NUEVA
+    if (imagen != null && !imagen.isEmpty()) {
+        // Eliminar imagen anterior si existe
+        if (existente.getNombreImagen() != null && !existente.getNombreImagen().isEmpty()) {
+            try {
+                fileStorageService.eliminarImagen(existente.getNombreImagen());
+            } catch (Exception e) {
+                // Log error pero continuar
+                System.err.println("Error al eliminar imagen anterior: " + e.getMessage());
+            }
+        }
+        
+        String nombreImagen = fileStorageService.guardarImagen(imagen);
+        existente.setNombreImagen(nombreImagen);
+    }
+    
+    return imageResponseRepository.save(existente);
+}
+
+
 }

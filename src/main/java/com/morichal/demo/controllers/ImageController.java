@@ -33,13 +33,29 @@ public class ImageController {
     @PostMapping("/extract-text")
     public ResponseEntity<?> uploadImage(@RequestParam("image") MultipartFile image) {
         try {
+            System.out.println("Recibida imagen para OCR: " + image.getOriginalFilename() + ", tamaño: " + image.getSize());
             Double extractedNumber = ocrService.extractNumberFromImage(image);
+            System.out.println("Número extraído: " + extractedNumber);
             imageResponse saved = ocrService.guardar(new imageResponse(extractedNumber));
-            System.out.println("Texto extraído: " + saved.getText());
+            System.out.println("Texto extraído guardado: " + saved.getText());
             return ResponseEntity.ok(new ExtractNumberDTO(saved.getText()));
         } catch (IllegalArgumentException e) {
+            System.err.println("Error en OCR: " + e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
+            System.err.println("Error inesperado al procesar la imagen: " + e.getMessage());
+            return ResponseEntity.status(500).body("Error al procesar la imagen.");
+        }
+    }
+
+    @PostMapping("/extract-full-text")
+    public ResponseEntity<?> extractFullText(@RequestParam("image") MultipartFile image) {
+        try {
+            String fullText = ocrService.extractFullTextFromImage(image);
+            System.out.println("Texto completo extraído: " + fullText);
+            return ResponseEntity.ok(fullText);
+        } catch (Exception e) {
+            System.err.println("Error al extraer texto completo: " + e.getMessage());
             return ResponseEntity.status(500).body("Error al procesar la imagen.");
         }
     }

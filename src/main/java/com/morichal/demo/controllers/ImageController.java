@@ -48,17 +48,6 @@ public class ImageController {
         }
     }
 
-    @PostMapping("/extract-full-text")
-    public ResponseEntity<?> extractFullText(@RequestParam("image") MultipartFile image) {
-        try {
-            String fullText = ocrService.extractFullTextFromImage(image);
-            System.out.println("Texto completo extraído: " + fullText);
-            return ResponseEntity.ok(fullText);
-        } catch (Exception e) {
-            System.err.println("Error al extraer texto completo: " + e.getMessage());
-            return ResponseEntity.status(500).body("Error al procesar la imagen.");
-        }
-    }
 
     @PostMapping
     public ResponseEntity<imageResponse> crearManual(

@@ -2,6 +2,7 @@ package com.morichal.demo.services;
 
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.RescaleOp;
 import java.io.File;
@@ -24,18 +25,6 @@ import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
 
-import com.google.cloud.vision.v1.AnnotateImageRequest;
-import com.google.cloud.vision.v1.AnnotateImageResponse;
-import com.google.cloud.vision.v1.Feature;
-import com.google.cloud.vision.v1.Feature.Type;
-import com.google.cloud.vision.v1.ImageAnnotatorClient;
-import com.google.protobuf.ByteString;
-
-import java.io.FileInputStream;
-import java.util.ArrayList;
-
-import com.google.cloud.vision.v1.Image.Builder;
-
 @Service
 public class OCRService {
 
@@ -48,365 +37,338 @@ public class OCRService {
     @Autowired
     private FileStorageService fileStorageService;
 
-    @Value("${google.cloud.vision.credentials.path}")
-    private String googleCredentialsPath;
-
+    // MODIFICAR el método extractNumberFromImage para incluir OCR especializado
     public Double extractNumberFromImage(MultipartFile image) throws IOException, TesseractException {
         if (image == null || image.isEmpty()) {
-            System.err.println("Error: No se recibió ningún archivo.");
             throw new IllegalArgumentException("No se recibió ningún archivo.");
         }
+        
         String contentType = image.getContentType();
         if (!isValidImageType(contentType)) {
-            System.err.println("Error: Tipo de archivo inválido: " + contentType);
             throw new IllegalArgumentException("Invalid file type. Only JPEG, JPG, and PNG are allowed.");
-        }
-
-        // Configurar variable de entorno para credenciales Google Cloud Vision
-        if (System.getProperty("GOOGLE_APPLICATION_CREDENTIALS") == null) {
-            System.setProperty("GOOGLE_APPLICATION_CREDENTIALS", googleCredentialsPath);
         }
 
         String extension = contentType.equals("image/png") ? ".png" : ".jpeg";
         File tempFile = File.createTempFile("upload-", extension);
         image.transferTo(tempFile);
 
-        // Preprocesar la imagen para mejorar OCR
-        BufferedImage bufferedImage = ImageIO.read(tempFile);
-        BufferedImage processedImage = preprocessImage(bufferedImage);
+        System.out.println("=== PROCESAMIENTO OCR MEJORADO ===");
+        System.out.println("Archivo: " + image.getOriginalFilename());
 
-        // Guardar imagen procesada temporalmente
-        File processedFile = File.createTempFile("processed-", extension);
-        ImageIO.write(processedImage, extension.replace(".", ""), processedFile);
+        Double result = null;
 
-        // Intentar usar Google Cloud Vision OCR primero
-        String textGoogle = callGoogleVisionOCR(processedFile);
-
-        // Usar Tesseract como segundo OCR
-        ITesseract tesseract = new Tesseract();
-        tesseract.setDatapath(tessDataPath); // Ruta a los datos de Tesseract
-        tesseract.setLanguage("eng");
-        tesseract.setTessVariable("tessedit_char_whitelist", "0123456789.");
-        tesseract.setPageSegMode(7); // Asume una sola línea de texto
-        String textTesseract = tesseract.doOCR(processedFile);
-
-        // Usar OpenCV OCR (suponiendo que tienes un método implementado para esto)
-        String textOpenCV = callOpenCVOCR(processedImage);
-
-        // Combinar resultados de los tres OCR
-        String combinedText = combineOCRResults(textGoogle, textTesseract, textOpenCV);
-
-        // Eliminar archivos temporales
-        tempFile.delete();
-        processedFile.delete();
-
-        // Extraer todos los números válidos del texto concatenados
-        String numberStr = combinedText.replaceAll("[^0-9.,]", "").replace(",", ".");
-        System.out.println("Texto combinado OCR: '" + combinedText + "'");
-        System.out.println("Número extraído tras limpieza: '" + numberStr + "'");
-        if (numberStr.isEmpty()) {
-            System.err.println("Error: No se detectó ningún número en la imagen.");
-            throw new IllegalArgumentException("No se detectó ningún número en la imagen.");
+        // MÉTODO 1: OCR Básico
+        result = tryBasicOCR(tempFile);
+        if (result != null && isValidNumber(result)) {
+            System.out.println("✅ Básico: " + result);
+            tempFile.delete();
+            return result;
         }
+
+        // MÉTODO 2: OCR especializado para grameras (NUEVO)
+        result = tryGrameraSpecialOCR(tempFile, extension);
+        if (result != null && isValidNumber(result)) {
+            System.out.println("✅ Gramera Especial: " + result);
+            tempFile.delete();
+            return result;
+        }
+
+        // MÉTODO 3: OCR con escalado
+        result = tryScaledOCR(tempFile, extension);
+        if (result != null && isValidNumber(result)) {
+            System.out.println("✅ Escalado: " + result);
+            tempFile.delete();
+            return result;
+        }
+
+        // MÉTODO 4: OCR con contraste
+        result = tryContrastOCR(tempFile, extension);
+        if (result != null && isValidNumber(result)) {
+            System.out.println("✅ Contraste: " + result);
+            tempFile.delete();
+            return result;
+        }
+
+        // MÉTODO 5: OCR invertido
+        result = tryInvertedOCR(tempFile, extension);
+        if (result != null && isValidNumber(result)) {
+            System.out.println("✅ Invertido: " + result);
+            tempFile.delete();
+            return result;
+        }
+
+        // MÉTODO 6: OCR múltiple
+        result = tryMultipleOCR(tempFile);
+        if (result != null && isValidNumber(result)) {
+            System.out.println("✅ Múltiple: " + result);
+            tempFile.delete();
+            return result;
+        }
+
+        tempFile.delete();
+        throw new IllegalArgumentException("No se detectó ningún número válido en la imagen.");
+    }
+
+    private Double tryBasicOCR(File imageFile) {
         try {
-            // Intentar parsear el número completo
-            Double parsedNumber = Double.parseDouble(numberStr);
-            return parsedNumber;
-        } catch (NumberFormatException e) {
-            // Si falla, intentar extraer números separados y concatenarlos
-            StringBuilder digitsOnly = new StringBuilder();
-            boolean decimalFound = false;
-            for (char c : numberStr.toCharArray()) {
-                if (Character.isDigit(c)) {
-                    digitsOnly.append(c);
-                } else if ((c == '.' || c == ',') && !decimalFound) {
-                    digitsOnly.append('.');
-                    decimalFound = true;
-                }
-            }
-            String finalNumberStr = digitsOnly.toString();
-            if (finalNumberStr.isEmpty()) {
-                System.err.println("Error: El texto extraído no es un número válido.");
-                throw new IllegalArgumentException("El texto extraído no es un número válido.");
-            }
-            // Intentar parsear reemplazando coma por punto para decimal
-            try {
-                Double parsedFinalNumber = Double.parseDouble(finalNumberStr);
-                return parsedFinalNumber;
-            } catch (NumberFormatException ex) {
-                System.err.println("Error: No se pudo parsear el número tras limpieza: " + finalNumberStr);
-                throw new IllegalArgumentException("El texto extraído no es un número válido.");
-            }
-        }
-    }
-
-    // Método placeholder para llamar a OpenCV OCR
-    private String callOpenCVOCR(BufferedImage image) {
-        // Aquí debes implementar la integración con OpenCV OCR
-        // Por ahora, retornamos cadena vacía para no romper el flujo
-        return "";
-    }
-
-    // Método para combinar resultados de los OCR
-    private String combineOCRResults(String text1, String text2, String text3) {
-        // Estrategia simple: elegir el texto con mayor longitud
-        String maxText = text1;
-        if (text2.length() > maxText.length()) {
-            maxText = text2;
-        }
-        if (text3.length() > maxText.length()) {
-            maxText = text3;
-        }
-        return maxText;
-    }
-
-    private String callGoogleVisionOCR(File imageFile) {
-        try (ImageAnnotatorClient client = ImageAnnotatorClient.create()) {
-            ByteString imgBytes = ByteString.readFrom(new java.io.FileInputStream(imageFile));
-            com.google.cloud.vision.v1.Image img = com.google.cloud.vision.v1.Image.newBuilder().setContent(imgBytes).build();
-            Feature feat = Feature.newBuilder().setType(Type.TEXT_DETECTION).build();
-            AnnotateImageRequest request = AnnotateImageRequest.newBuilder()
-                    .addFeatures(feat)
-                    .setImage(img)
-                    .build();
-            List<AnnotateImageRequest> requests = new ArrayList<>();
-            requests.add(request);
-            List<AnnotateImageResponse> responses = client.batchAnnotateImages(requests).getResponsesList();
-            for (AnnotateImageResponse res : responses) {
-                if (res.hasError()) {
-                    System.err.println("Error en Google Vision OCR: " + res.getError().getMessage());
-                    return "";
-                }
-                return res.getTextAnnotationsList().isEmpty() ? "" : res.getTextAnnotationsList().get(0).getDescription();
-            }
+            System.out.println("--- OCR Básico ---");
+            ITesseract tesseract = new Tesseract();
+            tesseract.setDatapath(tessDataPath);
+            tesseract.setLanguage("eng");
+            String text = tesseract.doOCR(imageFile);
+            System.out.println("Texto: '" + text + "'");
+            return extractNumberFromText(text);
         } catch (Exception e) {
-            System.err.println("Excepción en llamada a Google Vision OCR: " + e.getMessage());
+            System.err.println("Error básico: " + e.getMessage());
+            return null;
         }
-        return "";
     }
 
-    // Método adicional para obtener el texto completo extraído (para análisis y depuración)
-    public String extractFullTextFromImage(MultipartFile image) throws IOException, TesseractException {
-        if (image == null || image.isEmpty()) {
-            throw new IllegalArgumentException("No se recibió ningún archivo.");
+    private Double tryScaledOCR(File imageFile, String extension) {
+        try {
+            System.out.println("--- OCR Escalado ---");
+            BufferedImage original = ImageIO.read(imageFile);
+            
+            // Solo escalar si es muy pequeña
+            if (original.getWidth() < 200 || original.getHeight() < 50) {
+                BufferedImage scaled = scaleImageSafely(original, 3.0);
+                File processedFile = File.createTempFile("scaled-", extension);
+                ImageIO.write(scaled, extension.replace(".", ""), processedFile);
+                
+                ITesseract tesseract = new Tesseract();
+                tesseract.setDatapath(tessDataPath);
+                tesseract.setLanguage("eng");
+                tesseract.setPageSegMode(8);
+                tesseract.setVariable("tessedit_char_whitelist", "0123456789.,");
+                
+                String text = tesseract.doOCR(processedFile);
+                System.out.println("Texto escalado: '" + text + "'");
+                processedFile.delete();
+                return extractNumberFromText(text);
+            }
+            return null;
+        } catch (Exception e) {
+            System.err.println("Error escalado: " + e.getMessage());
+            return null;
         }
-        String contentType = image.getContentType();
-        if (!isValidImageType(contentType)) {
-            throw new IllegalArgumentException("Invalid file type. Only JPEG, JPG, and PNG are allowed.");
-        }
-
-        String extension = contentType.equals("image/png") ? ".png" : ".jpeg";
-        File tempFile = File.createTempFile("upload-", extension);
-        image.transferTo(tempFile);
-
-        // Preprocesar la imagen para mejorar OCR
-        BufferedImage bufferedImage = ImageIO.read(tempFile);
-        BufferedImage processedImage = preprocessImage(bufferedImage);
-
-        // Guardar imagen procesada temporalmente
-        File processedFile = File.createTempFile("processed-", extension);
-        ImageIO.write(processedImage, extension.replace(".", ""), processedFile);
-
-        // Usar Tesseract para reconocer el texto
-        ITesseract tesseract = new Tesseract();
-        tesseract.setDatapath(tessDataPath); // Ruta a los datos de Tesseract
-        tesseract.setLanguage("eng");
-        String text = tesseract.doOCR(processedFile);
-
-        // Eliminar archivos temporales
-        tempFile.delete();
-        processedFile.delete();
-
-        return text;
     }
 
-    private boolean isValidImageType(String contentType) {
-        return contentType.equals("image/jpeg") || contentType.equals("image/jpg") || contentType.equals("image/png");
+    private Double tryContrastOCR(File imageFile, String extension) {
+        try {
+            System.out.println("--- OCR Contraste ---");
+            BufferedImage original = ImageIO.read(imageFile);
+            BufferedImage enhanced = enhanceContrast(original);
+            
+            File processedFile = File.createTempFile("contrast-", extension);
+            ImageIO.write(enhanced, extension.replace(".", ""), processedFile);
+            
+            ITesseract tesseract = new Tesseract();
+            tesseract.setDatapath(tessDataPath);
+            tesseract.setLanguage("eng");
+            tesseract.setPageSegMode(7);
+            tesseract.setVariable("tessedit_char_whitelist", "0123456789.,");
+            
+            String text = tesseract.doOCR(processedFile);
+            System.out.println("Texto contraste: '" + text + "'");
+            processedFile.delete();
+            return extractNumberFromText(text);
+        } catch (Exception e) {
+            System.err.println("Error contraste: " + e.getMessage());
+            return null;
+        }
     }
 
-    // Método para preprocesar la imagen: ajustar brillo, contraste, binarizar, reducir ruido, corregir perspectiva y escalar
-   private BufferedImage preprocessImage(BufferedImage original) {
-    // Ajustar brillo y contraste
-    BufferedImage adjusted = adjustBrightnessContrast(original, 3.5f, 80f);
+    private Double tryInvertedOCR(File imageFile, String extension) {
+        try {
+            System.out.println("--- OCR Invertido ---");
+            BufferedImage original = ImageIO.read(imageFile);
+            BufferedImage inverted = invertColors(original);
+            
+            File processedFile = File.createTempFile("inverted-", extension);
+            ImageIO.write(inverted, extension.replace(".", ""), processedFile);
+            
+            ITesseract tesseract = new Tesseract();
+            tesseract.setDatapath(tessDataPath);
+            tesseract.setLanguage("eng");
+            tesseract.setPageSegMode(6);
+            tesseract.setVariable("tessedit_char_whitelist", "0123456789.,");
+            
+            String text = tesseract.doOCR(processedFile);
+            System.out.println("Texto invertido: '" + text + "'");
+            processedFile.delete();
+            return extractNumberFromText(text);
+        } catch (Exception e) {
+            System.err.println("Error invertido: " + e.getMessage());
+            return null;
+        }
+    }
 
-    // Convertir a escala de grises
-    BufferedImage gray = new BufferedImage(adjusted.getWidth(), adjusted.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-    Graphics2D g = gray.createGraphics();
-    g.drawImage(adjusted, 0, 0, null);
-    g.dispose();
-
-    // Aplicar filtro de reducción de ruido (blur más fuerte)
-    BufferedImage denoised = applyGaussianBlur(gray);
-    denoised = applyGaussianBlur(denoised);
-    denoised = applyGaussianBlur(denoised);
-
-    // Corregir perspectiva (perspective transform) - implementación simple para corregir distorsión trapezoidal
-    BufferedImage perspectiveCorrected = correctPerspective(denoised);
-
-    // Binarización con umbral adaptativo mejorado (umbral dinámico)
-    BufferedImage binary = adaptiveThresholdImproved(perspectiveCorrected);
-
-    // Corregir rotación aproximada (si es necesario)
-    BufferedImage deskewed = deskewImage(binary);
-
-    // Centrar la imagen recortando bordes vacíos
-    BufferedImage centered = centerImage(deskewed);
-
-    // Escalar imagen a un ancho fijo (ejemplo 1200px) manteniendo proporción
-    int targetWidth = 1200;
-    int targetHeight = (int) ((double) centered.getHeight() / centered.getWidth() * targetWidth);
-    Image scaled = centered.getScaledInstance(targetWidth, targetHeight, Image.SCALE_SMOOTH);
-    BufferedImage scaledBuffered = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_BYTE_BINARY);
-    Graphics2D g2 = scaledBuffered.createGraphics();
-    g2.drawImage(scaled, 0, 0, null);
-    g2.dispose();
-
-    return scaledBuffered;
-}
-
-private BufferedImage correctPerspective(BufferedImage image) {
-    // Implementación simple placeholder para corrección de perspectiva
-    // En un caso real, se usaría detección de contornos y transformación de perspectiva
-    // Aquí solo retornamos la imagen sin cambios para no romper el flujo
-    return image;
-}
-
-private BufferedImage adaptiveThresholdImproved(BufferedImage image) {
-    BufferedImage binary = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
-    int blockSize = 15; // tamaño de bloque para cálculo local
-    int constant = 10;  // constante para ajustar umbral
-    for (int y = 0; y < image.getHeight(); y++) {
-        for (int x = 0; x < image.getWidth(); x++) {
-            int sum = 0;
-            int count = 0;
-            // Calcular promedio local
-            for (int dy = -blockSize/2; dy <= blockSize/2; dy++) {
-                for (int dx = -blockSize/2; dx <= blockSize/2; dx++) {
-                    int nx = x + dx;
-                    int ny = y + dy;
-                    if (nx >= 0 && nx < image.getWidth() && ny >= 0 && ny < image.getHeight()) {
-                        int rgb = image.getRGB(nx, ny);
-                        int gray = rgb & 0xFF;
-                        sum += gray;
-                        count++;
+    private Double tryMultipleOCR(File imageFile) {
+        try {
+            System.out.println("--- OCR Múltiple ---");
+            int[] psmModes = {8, 7, 6, 13};
+            
+            for (int psm : psmModes) {
+                ITesseract tesseract = new Tesseract();
+                tesseract.setDatapath(tessDataPath);
+                tesseract.setLanguage("eng");
+                tesseract.setPageSegMode(psm);
+                tesseract.setVariable("tessedit_char_whitelist", "0123456789.,");
+                
+                try {
+                    String text = tesseract.doOCR(imageFile);
+                    System.out.println("PSM " + psm + ": '" + text + "'");
+                    Double result = extractNumberFromText(text);
+                    if (result != null && isValidNumber(result) && result > 0) {
+                        return result;
                     }
+                } catch (Exception e) {
+                    // Continuar con siguiente PSM
                 }
             }
-            int localThreshold = (sum / count) - constant;
-            int rgb = image.getRGB(x, y);
-            int gray = rgb & 0xFF;
-            int value = (gray < localThreshold) ? 0xFF000000 : 0xFFFFFFFF;
-            binary.setRGB(x, y, value);
+            return null;
+        } catch (Exception e) {
+            System.err.println("Error múltiple: " + e.getMessage());
+            return null;
         }
     }
-    return binary;
-}
-    // Método para centrar la imagen recortando bordes vacíos (pixeles blancos)
-    private BufferedImage centerImage(BufferedImage image) {
-        int top = 0, bottom = image.getHeight() - 1;
-        int left = 0, right = image.getWidth() - 1;
-        boolean found = false;
 
-        // Buscar borde superior
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                if ((image.getRGB(x, y) & 0xFFFFFF) != 0xFFFFFF) {
-                    top = y;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
+    // Agregar este método después de tryMultipleOCR
+    private Double tryGrameraSpecialOCR(File imageFile, String extension) {
+        try {
+            System.out.println("--- OCR Especializado Gramera ---");
+            BufferedImage original = ImageIO.read(imageFile);
+            
+            // MÉTODO 1: Escalar mucho la imagen para números pequeños
+            BufferedImage enlarged = scaleImageSafely(original, 5.0);
+            
+            // MÉTODO 2: Mejorar contraste específico para LED
+            BufferedImage enhanced = enhanceForLED(enlarged);
+            
+            // MÉTODO 3: Convertir a escala de grises
+            BufferedImage gray = convertToGrayscale(enhanced);
+            
+            File processedFile = File.createTempFile("gramera-", extension);
+            ImageIO.write(gray, extension.replace(".", ""), processedFile);
+            
+            // Probar múltiples configuraciones específicas para números largos
+            String[] results = new String[6];
+            
+            // PSM 8: Una sola palabra uniforme
+            results[0] = runTesseractSpecial(processedFile, 8, "0123456789");
+            
+            // PSM 7: Una sola línea de texto
+            results[1] = runTesseractSpecial(processedFile, 7, "0123456789");
+            
+            // PSM 6: Un solo bloque uniforme de texto
+            results[2] = runTesseractSpecial(processedFile, 6, "0123456789");
+            
+            // PSM 13: Línea cruda - trata la imagen como una sola línea
+            results[3] = runTesseractSpecial(processedFile, 13, "0123456789");
+            
+            // PSM 10: Trata la imagen como un solo carácter
+            results[4] = runTesseractSpecial(processedFile, 10, "0123456789");
+            
+            // PSM 9: Trata la imagen como una sola palabra en un círculo
+            results[5] = runTesseractSpecial(processedFile, 9, "0123456789");
+            
+            processedFile.delete();
+            
+            // Buscar el resultado más largo y válido (números de gramera suelen ser largos)
+            return selectBestGrameraResult(results);
+            
+        } catch (Exception e) {
+            System.err.println("Error OCR gramera: " + e.getMessage());
+            return null;
         }
-
-        // Buscar borde inferior
-        found = false;
-        for (int y = image.getHeight() - 1; y >= 0; y--) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                if ((image.getRGB(x, y) & 0xFFFFFF) != 0xFFFFFF) {
-                    bottom = y;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        // Buscar borde izquierdo
-        found = false;
-        for (int x = 0; x < image.getWidth(); x++) {
-            for (int y = 0; y < image.getHeight(); y++) {
-                if ((image.getRGB(x, y) & 0xFFFFFF) != 0xFFFFFF) {
-                    left = x;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        // Buscar borde derecho
-        found = false;
-        for (int x = image.getWidth() - 1; x >= 0; x--) {
-            for (int y = 0; y < image.getHeight(); y++) {
-                if ((image.getRGB(x, y) & 0xFFFFFF) != 0xFFFFFF) {
-                    right = x;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-
-        // Recortar la imagen al área encontrada
-        int width = right - left + 1;
-        int height = bottom - top + 1;
-        return image.getSubimage(left, top, width, height);
     }
 
-    // Método para aplicar un blur gaussiano simple para reducción de ruido
-    private BufferedImage applyGaussianBlur(BufferedImage image) {
-        // Implementación simple de blur usando convolución con kernel gaussiano
-        float[] matrix = {
-            1f/16f, 2f/16f, 1f/16f,
-            2f/16f, 4f/16f, 2f/16f,
-            1f/16f, 2f/16f, 1f/16f
-        };
-        java.awt.image.ConvolveOp op = new java.awt.image.ConvolveOp(new java.awt.image.Kernel(3, 3, matrix));
-        return op.filter(image, null);
+    // MÉTODOS DE PROCESAMIENTO
+    private BufferedImage scaleImageSafely(BufferedImage original, double factor) {
+        int newWidth = Math.max(50, (int)(original.getWidth() * factor));
+        int newHeight = Math.max(20, (int)(original.getHeight() * factor));
+        
+        Image scaled = original.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+        BufferedImage result = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = result.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g2.drawImage(scaled, 0, 0, null);
+        g2.dispose();
+        return result;
     }
 
-    // Método para binarización adaptativa simple (umbral fijo como aproximación)
-    private BufferedImage adaptiveThreshold(BufferedImage image) {
-        BufferedImage binary = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
+    private BufferedImage enhanceContrast(BufferedImage image) {
+        float scaleFactor = 1.5f;
+        float offset = 20f;
+        RescaleOp rescaleOp = new RescaleOp(scaleFactor, offset, null);
+        BufferedImage enhanced = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
+        rescaleOp.filter(image, enhanced);
+        return enhanced;
+    }
+
+    private BufferedImage invertColors(BufferedImage image) {
+        BufferedImage inverted = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
         for (int y = 0; y < image.getHeight(); y++) {
             for (int x = 0; x < image.getWidth(); x++) {
                 int rgb = image.getRGB(x, y);
-                int gray = rgb & 0xFF;
-                int threshold = 128; // umbral fijo, se puede mejorar con cálculo local
-                int value = (gray < threshold) ? 0xFF000000 : 0xFFFFFFFF;
-                binary.setRGB(x, y, value);
+                int r = 255 - ((rgb >> 16) & 0xFF);
+                int g = 255 - ((rgb >> 8) & 0xFF);
+                int b = 255 - (rgb & 0xFF);
+                inverted.setRGB(x, y, (r << 16) | (g << 8) | b);
             }
         }
-        return binary;
+        return inverted;
     }
 
-    // Método para corregir rotación aproximada (deskew)
-    private BufferedImage deskewImage(BufferedImage image) {
-        // Aquí se puede implementar un algoritmo de deskew más avanzado,
-        // pero para simplicidad, retornamos la imagen sin cambios.
-        // Se puede usar librerías externas para esto si se desea.
-        return image;
+    private Double extractNumberFromText(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return null;
+        }
+        
+        String cleanText = text.replaceAll("[^0-9.,]", "").replace(",", ".");
+        if (cleanText.isEmpty() || cleanText.equals(".") || cleanText.equals("...")) {
+            return null;
+        }
+        
+        try {
+            if (cleanText.indexOf('.') != cleanText.lastIndexOf('.')) {
+                int lastDotIndex = cleanText.lastIndexOf('.');
+                String integerPart = cleanText.substring(0, lastDotIndex).replace(".", "");
+                String decimalPart = cleanText.substring(lastDotIndex);
+                cleanText = integerPart + decimalPart;
+            }
+            
+            if (cleanText.startsWith(".")) {
+                cleanText = "0" + cleanText;
+            }
+            if (cleanText.endsWith(".")) {
+                cleanText = cleanText.substring(0, cleanText.length() - 1);
+            }
+            
+            Double result = Double.parseDouble(cleanText);
+            System.out.println("Número extraído: " + result);
+            return result;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
-    // Ajustar brillo y contraste usando RescaleOp
-    private BufferedImage adjustBrightnessContrast(BufferedImage image, float scaleFactor, float offset) {
-        RescaleOp rescaleOp = new RescaleOp(scaleFactor, offset, null);
-        BufferedImage adjusted = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
-        rescaleOp.filter(image, adjusted);
-        return adjusted;
+    private boolean isValidNumber(Double number) {
+        if (number == null) return false;
+        boolean valid = (number >= 0 && number <= 100000);
+        System.out.println("Validando: " + number + " -> " + (valid ? "VÁLIDO" : "INVÁLIDO"));
+        return valid;
     }
 
+    private boolean isValidImageType(String contentType) {
+        return contentType != null && (
+            contentType.equals("image/jpeg") || 
+            contentType.equals("image/jpg") || 
+            contentType.equals("image/png")
+        );
+    }
+
+    // MÉTODOS CRUD
     public List<imageResponse> listarTodos() {
         return imageResponseRepository.findAll();
     }
@@ -422,16 +384,13 @@ private BufferedImage adaptiveThresholdImproved(BufferedImage image) {
     public imageResponse actualizar(Long id, imageResponse nuevo) {
         imageResponse existente = imageResponseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
-
         existente.setText(nuevo.getText());
         existente.setuM(nuevo.getuM());
         existente.setCategoria(nuevo.getCategoria());
         existente.setEstado(nuevo.getEstado());
-
         if (nuevo.getNombreImagen() != null) {
             existente.setNombreImagen(nuevo.getNombreImagen());
         }
-
         return imageResponseRepository.save(existente);
     }
 
@@ -442,11 +401,9 @@ private BufferedImage adaptiveThresholdImproved(BufferedImage image) {
     public String obtenerRutaImagen(Long id) {
         imageResponse registro = imageResponseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
-
         if (registro.getNombreImagen() == null || registro.getNombreImagen().isEmpty()) {
             throw new RuntimeException("El registro no tiene imagen asociada");
         }
-
         return registro.getNombreImagen();
     }
 
@@ -456,18 +413,14 @@ private BufferedImage adaptiveThresholdImproved(BufferedImage image) {
         nuevo.setText(Double.parseDouble(text));
         nuevo.setuM(uM);
         nuevo.setEstado(estado);
-
-        // GUARDAR LA IMAGEN SI EXISTE
         if (imagen != null && !imagen.isEmpty()) {
             String nombreImagen = fileStorageService.guardarImagen(imagen);
             nuevo.setNombreImagen(nombreImagen);
         }
-
         return imageResponseRepository.save(nuevo);
     }
 
-    public imageResponse actualizarConImagen(Long id, String text, String uM, String categoria, String estado,
-            MultipartFile imagen) {
+    public imageResponse actualizarConImagen(Long id, String text, String uM, String categoria, String estado, MultipartFile imagen) {
         imageResponse existente = imageResponseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Registro no encontrado"));
 
@@ -476,14 +429,11 @@ private BufferedImage adaptiveThresholdImproved(BufferedImage image) {
         existente.setCategoria(categoria);
         existente.setEstado(estado);
 
-        // MANEJAR IMAGEN SI SE ENVÍA UNA NUEVA
         if (imagen != null && !imagen.isEmpty()) {
-            // Eliminar imagen anterior si existe
             if (existente.getNombreImagen() != null && !existente.getNombreImagen().isEmpty()) {
                 try {
                     fileStorageService.eliminarImagen(existente.getNombreImagen());
                 } catch (Exception e) {
-                    // Log error pero continuar
                     System.err.println("Error al eliminar imagen anterior: " + e.getMessage());
                 }
             }
@@ -495,4 +445,99 @@ private BufferedImage adaptiveThresholdImproved(BufferedImage image) {
         return imageResponseRepository.save(existente);
     }
 
+    // Métodos auxiliares para OCR de gramera
+    private BufferedImage enhanceForLED(BufferedImage image) {
+        BufferedImage enhanced = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+        
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int rgb = image.getRGB(x, y);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+                
+                // Aumentar contraste para displays LED
+                r = Math.min(255, Math.max(0, (int)((r - 128) * 2.0 + 128)));
+                g = Math.min(255, Math.max(0, (int)((g - 128) * 2.0 + 128)));
+                b = Math.min(255, Math.max(0, (int)((b - 128) * 2.0 + 128)));
+                
+                enhanced.setRGB(x, y, (r << 16) | (g << 8) | b);
+            }
+        }
+        return enhanced;
+    }
+
+    private BufferedImage convertToGrayscale(BufferedImage image) {
+        BufferedImage gray = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+        Graphics2D g = gray.createGraphics();
+        g.drawImage(image, 0, 0, null);
+        g.dispose();
+        return gray;
+    }
+
+    private String runTesseractSpecial(File imageFile, int psm, String whitelist) {
+        try {
+            ITesseract tesseract = new Tesseract();
+            tesseract.setDatapath(tessDataPath);
+            tesseract.setLanguage("eng");
+            tesseract.setPageSegMode(psm);
+            tesseract.setOcrEngineMode(1);
+            
+            // Configuración específica para números largos de gramera
+            tesseract.setVariable("tessedit_char_whitelist", whitelist);
+            tesseract.setVariable("classify_bln_numeric_mode", "1");
+            tesseract.setVariable("user_defined_dpi", "300");
+            tesseract.setVariable("textord_min_linesize", "1.0");
+            tesseract.setVariable("preserve_interword_spaces", "0");
+            
+            String result = tesseract.doOCR(imageFile).trim();
+            System.out.println("Gramera PSM " + psm + ": '" + result + "'");
+            
+            return result;
+            
+        } catch (Exception e) {
+            System.err.println("Error Tesseract PSM " + psm + ": " + e.getMessage());
+            return "";
+        }
+    }
+
+    private Double selectBestGrameraResult(String[] results) {
+        System.out.println("=== SELECCIONANDO MEJOR RESULTADO GRAMERA ===");
+        
+        Double bestResult = null;
+        int maxLength = 0;
+        
+        for (int i = 0; i < results.length; i++) {
+            String result = results[i];
+            System.out.println("Resultado " + (i+1) + ": '" + result + "'");
+            
+            if (result != null && !result.isEmpty()) {
+                // Limpiar y extraer número
+                String cleanResult = result.replaceAll("[^0-9]", "");
+                
+                if (!cleanResult.isEmpty()) {
+                    try {
+                        Double number = Double.parseDouble(cleanResult);
+                        
+                        // Para grameras, preferir números más largos (más dígitos)
+                        if (isValidNumber(number) && cleanResult.length() > maxLength) {
+                            bestResult = number;
+                            maxLength = cleanResult.length();
+                            System.out.println("✅ Nuevo mejor: " + number + " (longitud: " + maxLength + ")");
+                        }
+                    } catch (NumberFormatException e) {
+                        // Ignorar resultados que no se pueden parsear
+                    }
+                }
+            }
+        }
+        
+        if (bestResult != null) {
+            System.out.println("🎯 Resultado final gramera: " + bestResult);
+        } else {
+            System.out.println("❌ No se encontró resultado válido para gramera");
+        }
+        
+        return bestResult;
+    }
 }
